@@ -1,4 +1,4 @@
-  
+unsigned long timer1 = 0;
 int incomingByte = 0; // for incoming serial data
 
 #include <Wire.h> 
@@ -10,8 +10,8 @@ bool b12 = 0, b12old = 0;
 bool b11 =0, b11old = 0;
 bool b10 = 0, b10old = 0;
 bool b9 = 0, b9old = 0;
-
-int Damage[5][2][18] = {
+bool jumper = 0;
+int level[5][2][18] = {
                        {{0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,1},
                         {1,1,0,0,0,1,1,1,1,0,0,0,0,1,0,0,
                         0,0}},
@@ -37,14 +37,6 @@ int y = 1;
 int xold = 1;
 int yold = 1;
 int lev = 0;
-byte kistenid = 0;
-int oldlevelid = 2;
-struct kiste{
-        byte x = 0;
-        byte y = 0;
-       } kist[5];
-
-struct kiste Kisten[5];
 void setup()
 {
   // initialize the LCD
@@ -54,42 +46,36 @@ void setup()
   lcd.backlight();
 
   Serial.begin(9600);
-  
+  timer1 = millis();
 }
 
 void leveldesign(byte levelid){
-    if(levelid != oldlevelid){
-      oldlevelid = levelid;
-      for(byte neu = 0; neu < 5; neu++){Kisten[neu].x=0;Kisten[neu].y=0;kistenid = 0;}
-      for(byte row = 0; row < 2; row++){
-        for(byte col = 0; col < 16; col++){
-          if(Damage[levelid][row][col] == 2){Kisten[kistenid].x=col; Kisten[kistenid].y = row; kistenid++;}
-        }  
-      }      
-    }
-    if(x != xold || y != yold){
+    if(x != xold || y != yold  || (timer1+1000) <= millis()){
+    
     xold = x;
     yold = y; 
+    if(lev == 0 && (timer1+1000) <= millis()){
+      timer1 = millis();
+      if(jumper == 0){
+      jumper += 1;
+      level[0][0][10] = 0;
+      level[0][1][10] = 1; 
+      }else {
+      jumper -= 1;
+      level[0][0][10] = 1;
+      level[0][1][10] = 0; 
+      } 
+      Serial.print(jumper);
+    }
     for(byte row = 0; row < 2; row++){
       for(byte col = 0; col < 16; col++){
         lcd.setCursor(col,row);
-        if(Damage[levelid][row][col] == 0){lcd.print(" ");}
-        if(Damage[levelid][row][col] == 1){lcd.print("x");}
-        if(Damage[levelid][row][col] == 2){lcd.print("o");}
+        if(level[levelid][row][col] == 0){lcd.print(" ");}
+        if(level[levelid][row][col] == 1){lcd.print("x");}
+        if(level[levelid][row][col] == 2){lcd.print("o");}
       }  
     } 
-  }
-  if(Damage[levelid][y][x] == true){
-    lcd.setCursor(0,0);    
-    lcd.print("    Verloren     ");
-    lcd.setCursor(0,1);
-    lcd.print("-----------------");
-    delay(1000);
-    xold = 20;
-    yold = 20; 
-    x = Damage[levelid][1][16];
-    y = Damage[levelid][1][17];
-  }  
+  } 
 }
 
 void loop()
@@ -110,18 +96,37 @@ void loop()
     x = 0;
     lev++;  
   }
-  for(byte ooo = 0; ooo < 5; ooo++){
-    if(Kisten[ooo].x == x && Kisten[ooo].y == y){
-      Damage[lev][Kisten[ooo].y][Kisten[ooo].x] = 0;
-      if(x != xold){Kisten[ooo].x += (x-xold);
-      Damage[lev][Kisten[ooo].y][Kisten[ooo].x] = 2;}else 
-      
-      if(y != yold){ 
-      if((Kisten[ooo].y+1) == 2){Kisten[ooo].y = 0;Damage[lev][Kisten[ooo].y][Kisten[ooo].x] = 2;}
-      if((Kisten[ooo].y-1) == -1){Kisten[ooo].y = 1;Damage[lev][Kisten[ooo].y][Kisten[ooo].x] = 2;}
-      
+  switch(level[lev][y][x]){
+    case 1:
+      lcd.setCursor(0,0);    
+      lcd.print("    YOU DIED    ");
+      lcd.setCursor(0,1);
+      lcd.print("----------------");
+      delay(1000);
+      xold = 20;
+      yold = 20; 
+      x = level[lev][1][16];
+      y = level[lev][1][17];
+      break;
+    case 2:
+      if(x!= xold && level[lev][y][x+1] == 1 || y != yold &&  level[lev][y+1][x] == 1 || x!= xold && level[lev][y][x-1] == 1 || y != yold &&  level[lev][y-1][x] == 1){
+        x = xold;
+        y = yold;
+      }else 
+      if(x!= xold && level[lev][y][x+1] == 2 || y != yold &&  level[lev][y+1][x] == 2 || x!= xold && level[lev][y][x-1] == 2 || y != yold &&  level[lev][y-1][x] == 2){
+        x = xold;
+        y = yold;
+      }else{
+        level[lev][y][x] = 0;
+        if(y != yold){
+          if(y == 0){level[lev][y+1][x] = 2;}
+          if(y == 1){level[lev][y-1][x] = 2;}
+        }
+        if(x != xold){
+          level[lev][y][(x+(x-xold))] = 2;
+        }
       }
-    }  
+    default: break;  
   }
   leveldesign(lev);
   lcd.setCursor(x,y);
